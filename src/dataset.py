@@ -8,7 +8,7 @@ import os
 
 class OpcodeTokenizer:
     def __init__(self, vocab_path=config.VOCAB_FILE):
-        # 如果词汇表不存在，提示先运行 preprocess.py
+        # 检查词汇表是否存在
         if not os.path.exists(vocab_path):
             raise FileNotFoundError(f"词汇表未找到: {vocab_path}。请先运行 preprocess.py。")
             
@@ -42,8 +42,8 @@ class OpcodeTokenizer:
         
         # 4. 截断或填充
         if actual_len > max_length:
-            # 截断：保留 [CLS]，截断中间，最后保留 [SEP] 是通常做法，
-            # 但为了简单，这里直接截断末尾，硬截断
+            # 截断：保留 [CLS]，截断中间，最后保留 [SEP] 是通常做法
+            # 这里为了保持上下文连贯，简单截断末尾
             token_ids = token_ids[:max_length]
             attention_mask = [1] * max_length
         else:
@@ -65,9 +65,13 @@ class BCSDDataset(Dataset):
     def __init__(self, data_path=config.TRAIN_ID_FILE):
         self.data = []
         print(f"Loading dataset from {data_path}...")
+        if not os.path.exists(data_path):
+             raise FileNotFoundError(f"ID数据文件未找到: {data_path}。请先运行本脚本的 process_data_to_ids 函数。")
+
         with open(data_path, 'r') as f:
             for line in f:
                 self.data.append(json.loads(line))
+        print(f"数据集加载完毕，共 {len(self.data)} 条样本。")
                 
     def __len__(self):
         return len(self.data)
@@ -85,12 +89,18 @@ class BCSDDataset(Dataset):
 
 def process_data_to_ids():
     """
-    一次性脚本：读取 token 形式的数据，转化为 id 形式并保存。
+    一次性脚本：读取包含 'instructions' 的数据，
+    将其拆解(Flatten)为 tokens，转化为 id 形式并保存。
     """
-    print("开始序列化数据 (Token -> IDs)...")
+    print("开始序列化数据 (Instructions -> Tokens -> IDs)...")
     
     # 1. 初始化 Tokenizer
-    tokenizer = OpcodeTokenizer()
+    try:
+        tokenizer = OpcodeTokenizer()
+    except FileNotFoundError as e:
+        print(e)
+        return
+
     print(f"Tokenizer 已加载，词汇表大小: {tokenizer.get_vocab_size()}")
     
     input_path = config.TRAIN_DATA_FILE
@@ -105,16 +115,33 @@ def process_data_to_ids():
         # 逐行读取，处理，写入
         for line in tqdm(f_in, desc="Processing"):
             item = json.loads(line)
-            raw_tokens = item['tokens']
             
-            # 核心转换
+            # --- 核心修改部分 Start ---
+            # 旧逻辑: raw_tokens = item['tokens']
+            # 新逻辑: 读取 'instructions' 列表并拆分为 token 列表
+            # 例子: ["MOV EAX MEM", "RET"] -> ["MOV", "EAX", "MEM", "RET"]
+            
+            if 'instructions' in item:
+                raw_tokens = []
+                for insn_str in item['instructions']:
+                    # 使用 split() 默认按空格分割
+                    raw_tokens.extend(insn_str.split())
+            elif 'tokens' in item:
+                # 兼容旧格式（防止报错，但建议重新预处理）
+                raw_tokens = item['tokens']
+            else:
+                # 数据异常跳过
+                continue
+            # --- 核心修改部分 End ---
+            
+            # 编码转换
             input_ids, attention_mask = tokenizer.encode(raw_tokens)
             
-            # 构建新的记录
+            # 构建新的记录 (只保留训练需要的最小字段以节省空间)
             new_item = {
                 "func_name": item['func_name'],
                 "project": item['project'],
-                "binary": item['binary'],
+                "binary": item.get('binary', ''), # 使用 get 防止旧数据缺失 key
                 "input_ids": input_ids,
                 "attention_mask": attention_mask
             }

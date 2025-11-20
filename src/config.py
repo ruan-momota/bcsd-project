@@ -35,11 +35,11 @@ TRAIN_ID_FILE = os.path.join(PROCESSED_DATA_DIR, "train_ids.json")
 # Teacher模型配置
 # 注意：如果 CLAP-ASM 是你本地微调过的模型，请将此处改为本地文件夹路径
 # 这里我暂且用 'microsoft/codebert-base' 作为占位符，请替换为你实际使用的 CLAP-ASM 模型 ID 或路径
-TEACHER_MODEL_ID = "microsoft/codebert-base" 
+TEACHER_MODEL_ID = "hustcw/clap-asm" 
 
 # 知识向量保存路径
 # 我们将生成的向量矩阵保存为 PyTorch 的 .pt 文件，加载速度最快
 TEACHER_EMBEDDINGS_FILE = os.path.join(PROCESSED_DATA_DIR, "teacher_embeddings.pt")
 
 # 推理批次大小 (根据你的显存调整，显存大可以设为 32 或 64)
-BATCH_SIZE = 16
+BATCH_SIZE = 32
