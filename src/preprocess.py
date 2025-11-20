@@ -113,7 +113,9 @@ class Preprocessor:
         """
         print(f"开始遍历数据目录: {config.RAW_DATA_DIR}")
 
+        # for test use
         test = 0
+        test1 = 0
         
         # 遍历Dataset-1下的所有项目文件夹 (clamav, curl, etc.)
         for project_name in os.listdir(config.RAW_DATA_DIR):
@@ -129,6 +131,11 @@ class Preprocessor:
             binary_files = [f for f in os.listdir(project_path) if not f.startswith('.')]
             
             for bin_file in tqdm(binary_files):
+
+                # for test use
+                if test1 == 10: break
+                test1+=1
+
                 bin_path = os.path.join(project_path, bin_file)
                 self.process_binary(bin_path, project_name)
         
