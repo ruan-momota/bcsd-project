@@ -8,14 +8,9 @@ from torch.utils.data import DataLoader, Dataset
 import config
 
 class TeacherInferenceDataset(Dataset):
-    """
-    读取预处理后的 json 数据，提取 'instructions' 字段。
-    """
     def __init__(self, data_path):
         self.samples = []
         print(f"正在加载数据: {data_path}")
-        
-        # 必须严格按照顺序读取
         with open(data_path, 'r') as f:
             for line in f:
                 item = json.loads(line)
@@ -71,11 +66,7 @@ def generate_teacher_knowledge():
     # 4. 推理循环
     with torch.no_grad():
         for batch_data in tqdm(dataloader, desc="Distilling Knowledge"):
-            # batch_data 是一个 list of lists: [ ["MOV EAX", "RET"], ... ]
-            
-            # --- 核心修复点 1: 手动截断 ---
-            # 为了防止 OOM 且替代 tokenizer 的 truncation，我们只取前 256 条指令
-            # 并用换行符拼接成字符串
+            # 手动截断并拼接
             formatted_batch = [
                 {"instructions": "\n".join(func_ins[:256])} 
                 for func_ins in batch_data
@@ -83,13 +74,9 @@ def generate_teacher_knowledge():
 
             # Tokenize
             try:
-                # --- 核心修复点 2: 移除 truncation 参数 ---
-                # CLAP-ASM 的 tokenizer 不支持 truncation 参数，必须移除
                 inputs = tokenizer(
                     formatted_batch, 
                     padding=True, 
-                    # truncation=True,  <-- 已移除
-                    # max_length=512,   <-- 已移除
                     return_tensors="pt"
                 )
             except Exception as token_e:
@@ -99,12 +86,33 @@ def generate_teacher_knowledge():
             input_ids = inputs['input_ids'].to(device)
             attention_mask = inputs['attention_mask'].to(device)
             
+            # 模型前向传播
             outputs = model(input_ids=input_ids, attention_mask=attention_mask)
             
-            if hasattr(outputs, 'pooler_output') and outputs.pooler_output is not None:
+            # --- 核心修复逻辑 Start ---
+            # 1. 检查输出是否直接就是 Tensor
+            if isinstance(outputs, torch.Tensor):
+                # 如果是二维 (Batch, Hidden)，说明已经是 Pooling 后的向量了，直接用
+                if outputs.dim() == 2:
+                    emb = outputs
+                # 如果是三维 (Batch, Seq, Hidden)，说明是序列，取第一个 [CLS]
+                else:
+                    emb = outputs[:, 0, :]
+            
+            # 2. 如果是标准 HuggingFace 对象
+            elif hasattr(outputs, 'pooler_output') and outputs.pooler_output is not None:
                 emb = outputs.pooler_output
-            else:
+            elif hasattr(outputs, 'last_hidden_state'):
                 emb = outputs.last_hidden_state[:, 0, :]
+            
+            # 3. 兜底：如果是 tuple
+            elif isinstance(outputs, (list, tuple)):
+                 # 通常第一个元素是 hidden states
+                 emb = outputs[0][:, 0, :]
+            else:
+                print(f"未知输出类型: {type(outputs)}")
+                continue
+            # --- 核心修复逻辑 End ---
             
             all_embeddings.append(emb.cpu())
 
