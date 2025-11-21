@@ -1,5 +1,5 @@
 import torch
-import config  # 导入你的配置，为了获取路径
+import config
 
 # 1. 设定文件路径 (或者直接写绝对路径)
 file_path = config.TEACHER_EMBEDDINGS_FILE

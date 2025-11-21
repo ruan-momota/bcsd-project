@@ -1,4 +1,3 @@
-# src/dataset.py
 import json
 import torch
 from torch.utils.data import Dataset
@@ -10,7 +9,7 @@ class OpcodeTokenizer:
     def __init__(self, vocab_path=config.VOCAB_FILE):
         # 检查词汇表是否存在
         if not os.path.exists(vocab_path):
-            raise FileNotFoundError(f"词汇表未找到: {vocab_path}。请先运行 preprocess.py。")
+            raise FileNotFoundError(f"词汇表未找到: {vocab_path}")
             
         self.vocab = self.load_vocab(vocab_path)
         # 创建反向词汇表 (id -> word)，用于调试或解码
@@ -42,8 +41,8 @@ class OpcodeTokenizer:
         
         # 4. 截断或填充
         if actual_len > max_length:
-            # 截断：保留 [CLS]，截断中间，最后保留 [SEP] 是通常做法
-            # 这里为了保持上下文连贯，简单截断末尾
+            # 截断：保留 [CLS]，截断中间，最后保留 [SEP]
+            # 为了保持上下文连贯，简单截断末尾
             token_ids = token_ids[:max_length]
             attention_mask = [1] * max_length
         else:
@@ -66,7 +65,7 @@ class BCSDDataset(Dataset):
         self.data = []
         print(f"Loading dataset from {data_path}...")
         if not os.path.exists(data_path):
-             raise FileNotFoundError(f"ID数据文件未找到: {data_path}。请先运行本脚本的 process_data_to_ids 函数。")
+             raise FileNotFoundError(f"ID数据文件未找到: {data_path}。先运行 process_data_to_ids 函数。")
 
         with open(data_path, 'r') as f:
             for line in f:

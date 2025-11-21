@@ -1,4 +1,3 @@
-# src/preprocess.py
 import os
 import json
 import angr
@@ -14,10 +13,10 @@ class Preprocessor:
     
     def normalize_operand(self, operand):
         """
-        归一化操作数的逻辑：
+        归一化操作数：
         - 内存引用 -> MEM
         - 大的立即数 -> IMM
-        - 小常数/寄存器 -> 保留
+        - 小常数 寄存器 -> 保留
         """
         # 1. 检测内存引用 (通常包含括号 [] 或 sp/bp 偏移)
         if '[' in operand or ']' in operand:
@@ -55,7 +54,7 @@ class Preprocessor:
         tokens = [mnemonic]
         
         if op_str:
-            # 分割操作数，通常用逗号分隔
+            # 分割操作数，用逗号分隔
             operands = [op.strip() for op in op_str.split(',')]
             for op in operands:
                 norm_op = self.normalize_operand(op)
@@ -72,7 +71,7 @@ class Preprocessor:
             # 加载二进制，禁用自动加载库以加快速度
             proj = angr.Project(file_path, auto_load_libs=False, load_debug_info=False)
             
-            # 生成控制流图 (CFG) 来识别函数
+            # 生成CFG来识别函数
             cfg = proj.analyses.CFGFast(normalize=True)
             
             # 遍历所有函数
@@ -98,12 +97,17 @@ class Preprocessor:
                         insn_str = " ".join(norm_tokens)
                         func_instructions.append(insn_str)
                 
-                # 过滤过短的函数 (少于 5 条指令)
+                # 过滤过短的函数
                 if len(func_instructions) < 5:
+                    continue
+
+                # 过滤nop
+                unique_insns = set(func_instructions)
+                if len(unique_insns) == 1 and "nop" in unique_insns:
+                    # 整个函数只有 nop
                     continue
                     
                 # 添加到数据集
-                # 注意：这里 Key 变成了 'instructions'
                 self.dataset.append({
                     "project": project_name,
                     "binary": filename,
@@ -121,16 +125,13 @@ class Preprocessor:
         """
         print(f"开始遍历数据目录: {config.RAW_DATA_DIR}")
 
-        # 调试用计数器 (如需测试少量数据，可取消下方注释)
+        # 调试用计数器
         test_proj_count = 0
         
         # 遍历Dataset-1下的所有项目文件夹 (clamav, curl, etc.)
         projects = sorted(os.listdir(config.RAW_DATA_DIR))
-        
-        test1 = 0
 
         for project_name in projects:
-
 
             project_path = os.path.join(config.RAW_DATA_DIR, project_name)
             if not os.path.isdir(project_path):
@@ -144,14 +145,9 @@ class Preprocessor:
             
             # 使用 tqdm 显示进度条
             for bin_file in tqdm(binary_files, desc=f"Parsing {project_name}"):
-
-                if test1 == 10:
-                    break
-
-                test1 += 1
                 
-                # 调试用：如果只想跑每个项目的前10个文件，可以取消下面两行注释
-                # if binary_files.index(bin_file) >= 10: break 
+                # 调试用
+                if binary_files.index(bin_file) >= 10: break 
                 
                 bin_path = os.path.join(project_path, bin_file)
                 self.process_binary(bin_path, project_name)
