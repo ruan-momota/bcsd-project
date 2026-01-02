@@ -9,11 +9,10 @@ __pycache__/
 # --- VS Code 配置 (个人配置不上传) ---
 .vscode/
 
-# --- 项目特定忽略 (关键！) ---
 # 忽略原始二进制数据集
 data/raw/
 # 忽略处理后的巨大JSON文件 (如果很大就忽略，小的话可以保留)
-data/processed/
+data/
 
 # 忽略训练产出 (日志和模型权重)
 outputs/
