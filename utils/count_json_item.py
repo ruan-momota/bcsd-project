@@ -4,7 +4,7 @@ import time
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_ROOT = os.path.join(PROJECT_ROOT, "data")
-FILE_PATH = os.path.join(DATA_ROOT, "asm_x64", "unrar", "x64-clang-3.5-O0_unrar.json")
+FILE_PATH = os.path.join(DATA_ROOT, "bcsd_benchmark", "bcsd_pool.json")
 
 
 def count_elements_large_file(file_path):
