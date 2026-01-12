@@ -32,7 +32,7 @@
 
 - 从Hugging Face加载CLAP-ASM
 
-- 将1.1生成的json格式的汇编利用CLAP-ASM的tokenizer生成对应的input
+- 将1.1生成的json格式的汇编利用CLAP-ASM的tokenizer生成对应的input(encoding)
 
 - 利用teacher模型CLAP-ASM的encoder将input生成对应的知识向量
 
@@ -41,10 +41,11 @@
 ## 2 模型架构定义
 
 目标：定义一个统一的轻量级Bert架构，同时用于Baseline和student model
+
 - 要求baseline和student模型在rtx2060 12gb上能一个小时内训练完，调整合适的层数和维度
 - Embedding层：将Token ID映射为256维向量
 - Transformer Encoder：4层Transformer Blocks，8个Attention Heads，隐藏层维度256（暂定，可调整）
-- Pooling层：获取[CLS]Token的输出向量，作为整个函数的嵌入
+- Pooling层：获取[CLS]Token的输出向量，作为整个函数的embedding
 
 产出：一个Small Bert模型
 
@@ -68,7 +69,7 @@
 
 - 随机选择1000个函数作为查询集
 
-- 随机选取10000个函数构建candidate pool
+- 随机选取100000个函数构建candidate pool
 
 - 生成Ground Truth（json文件），映射每个Query在Pool中的正确候选项。
 
@@ -84,9 +85,9 @@
 
 ### 4.2 训练Baseline
 
-- 输入：从训练集动态采样三元组（Anchor, Positive, Negative）。（输入是三个操作码ID序列）
+- 输入：从训练集动态采样三元组（Anchor, Positive, Negative）。（输入是三个函数的encoding）
 
-- 过程：SmallBERT分别计算三个序列的[CLS]嵌入向量
+- 过程：SmallBERT分别计算三个序列的嵌入向量
 
 - 损失函数：TripletLoss，使(Anchor, Positive)距离最小化，（Anchor, Nagative）距离最大化
 
@@ -94,40 +95,59 @@
 
 - 获取Baseline的MRR10和Recall@1
 
-## 5 student model知识蒸馏和微调
+## 5 student model知识蒸馏
 
 目标：验证KD能否让相同架构的SmallBERT达到更高性能。
 
 ### 5.1 KD预训练
 
-目标：使SmallBERT学会用操作码序列复现Teacher(CLAP-ASM)的高维语义向量
+目标：用SmallBERT模仿Teacher(CLAP-ASM)的对汇编代码相似度的排序
 
-- 同样实例化模型
+- 注意点：
+    - student和teacher模型的encoding相同
+    - SmallBERT输出256维embedding，CLAP-ASM输出768维embedding
+    - 使用ranking based ditillation方法
+    - 查阅论文，可以尝试多种ranking based distillaiton方法，并进行横向对比
 
-- 输入：Dataset-1中的一个Batch的操作码ID序列
+目标：用SmallBERT模仿Teacher(CLAP-ASM)的对汇编代码相似度的排序
 
-- Teacher推理：输入汇编文本 -> 得到N个向量 -> 计算NxN相似度矩阵S_teacher
+- 注意点：
+    - student和teacher模型的encoding相同
+    - SmallBERT输出256维embedding，CLAP-ASM输出768维embedding
+    - 使用ranking based ditillation方法
+    - 查阅论文，可以尝试多种ranking based distillaiton方法，并进行横向对比
 
-- Student推理：输入Opcodes IDs -> 得到N个向量 -> 计算NxN相似度矩阵S_student
+方案A：基于概率分布KL-Divergence
 
-- 损失函数：Loss = KL_Divergence(S_teacher, S_Student)
+- 构建新的数据集Distillation Dataset（不使用baseline的triplet采样）
+    - 输入：汇编json文件和teacher_embedding
+    - 索引对齐：json文件中每个函数的index要和teacher_embedding对齐
+    - _/_getitem__: 不返回(anc,pos,neg)，而是返回单个函数样本
+        包括input_ids,attention_mask,token_type_ids,teacher_embed四个维度
 
-- 产出：一个预训练好的Student Model
+- 损失函数设计
+    - student相似度矩阵：输入batch(N)和encoding序列，student输出Nx256向量，计算NxN相似度矩阵
+      teacher相似度矩阵：对于teacher,通过DataLoader从pt文件直接获取Nx768向量，计算相似度矩阵
+    - 温度调节：引入超参数T，在进行softmax之前，将相似度矩阵除以T，(初始设为2.0)
+    - 概率分布对齐：将矩阵每一行进行归一化。每一行表示每个样本作为Query，和Batch内其他样本的相似度分布。
+    - P_stu=softmax(S_stu/T), P_tea=softmax(S_tea/T)
+    - 损失函数：LossKD=T^2 x nn.KLDivLoss(P_stu, P_tea)
+    - 混合损失（可选）：为了防止 Student 在学习“相对关系”时彻底丢失“正样本必须拉近”的绝对目标，可以保留一部分 Task Loss
+
+- 训练流程
+    - 加载SmallBERT
+    - Input: 从DataLoader获取input_ids和teacher_vecs
+    - Forward: student_vecs = model(input_ids...)
+    - Loss: 用LossKD计算student_vecs和teacher_vecs之间的散度
+    - Backward: 更新student参数
+
+- 评估
+    - 每训练1个Epoch，在BCSD测试集验证，对比student的MRR是否超过Baseline
 
 
-### 5.2 模型微调
+### 5.2 模型评估
 
-目标：在KD预训练基础上，针对BCSD任务调优
-
-- 采用与Baseline相同的TriletLoss训练方案。
-
-产出：微调后的Student Model
-
-- 优化：将微调和KD预训练结合，Loss_total = α*Loss_KD + β * Loss_triplet
-
-### 5.3 模型评估
-
-- 使用微调后的Student Model，在测试集上运行BCSD评估。
+- 将Student Model在测试集上运行BCSD评估。
 
 产出：student model的MRR10和Recall@1
 

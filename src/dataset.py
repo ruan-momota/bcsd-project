@@ -39,6 +39,7 @@ class BCSDTripletDataset(Dataset):
         return len(self.valid_func_names)
 
     # use for DataLoader
+    # should be optimized
     def __getitem__(self, idx):
         # choose an anchor func_name randomly
         group_name = self.valid_func_names[idx]
