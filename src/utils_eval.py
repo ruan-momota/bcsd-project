@@ -46,61 +46,52 @@ def compute_mrr_recall(similarity_matrix, ground_truth, k=10):
     return mrr_score, recall_score
 
 @torch.no_grad()
-def evaluate_model(model, tokenizer, device, benchmark_dir):
-    # load Benchmark data
+def evaluate_model(model, device, benchmark_dir):
     try:
-        with open(os.path.join(benchmark_dir, "bcsd_queries.json"), 'r') as f:
-            queries = json.load(f)
-        with open(os.path.join(benchmark_dir, "bcsd_pool.json"), 'r') as f:
-            pool = json.load(f)
+        queries = torch.load(os.path.join(benchmark_dir, "bcsd_queries.pt"))
+        pool = torch.load(os.path.join(benchmark_dir, "bcsd_pool.pt"))
+        
         with open(os.path.join(benchmark_dir, "bcsd_ground_truth.json"), 'r') as f:
             gt = json.load(f)
-    except FileNotFoundError:
-        print("Benchmark files not found.")
+            
+    except FileNotFoundError as e:
+        print(f"Benchmark files not found: {e}")
         return 0.0, 0.0
 
     model.eval()
     
-    # encoding Queries
-    query_vecs = []
-    # print("Encoding Queries...")
-    eval_batch = 32
-    
-    for i in range(0, len(queries), eval_batch):
-        batch = queries[i : i+eval_batch]
-        texts = [item['asm_text'] for item in batch]
-        tokenizer.model_max_length = 512
-        inputs = tokenizer(texts, 
-                           padding='max_length', 
-                           max_length=512, 
-                           return_tensors='pt').to(device)
-        vecs = model(inputs['input_ids'], inputs['attention_mask'], inputs['token_type_ids'])
-        query_vecs.append(vecs.cpu())
-    query_tensor = torch.cat(query_vecs, dim=0) # [Q, 256]
+    def get_embeddings(data_list, batch_size=512):
+        vecs = []
+        for i in range(0, len(data_list), batch_size):
+            batch_items = data_list[i : i + batch_size]
+            
+            input_ids = torch.stack([item['student_input']['input_ids'] for item in batch_items]).to(device)
+            attention_mask = torch.stack([item['student_input']['attention_mask'] for item in batch_items]).to(device)
+            token_type_ids = torch.stack([item['student_input']['token_type_ids'] for item in batch_items]).to(device)
 
-    # encoding Pool
-    # print("Encoding Pool...")
-    pool_vecs = []
-    for i in range(0, len(pool), eval_batch):
-        batch = pool[i : i+eval_batch]
-        texts = [item['asm_text'] for item in batch]
-        tokenizer.model_max_length = 512
-        inputs = tokenizer(texts, 
-                           padding='max_length', 
-                           max_length=512, 
-                           return_tensors='pt').to(device)
-        vecs = model(inputs['input_ids'], inputs['attention_mask'], inputs['token_type_ids'])
-        pool_vecs.append(vecs.cpu())
-    pool_tensor = torch.cat(pool_vecs, dim=0) # [P, 256]
+            batch_vecs = model(input_ids, attention_mask, token_type_ids)
+            vecs.append(batch_vecs.cpu())
+            
+        if len(vecs) > 0:
+            return torch.cat(vecs, dim=0)
+        else:
+            return torch.tensor([])
+
+    # Encoding Queries
+    query_tensor = get_embeddings(queries) # [Q, Hidden_Dim]
+
+    # Encoding Pool
+    pool_tensor = get_embeddings(pool)     # [P, Hidden_Dim]
     
-    # normalize vectors before calculating sim matrix
+    # normalize vectors before calculating sim matrix (Cosine Similarity)
     query_norm = torch.nn.functional.normalize(query_tensor, p=2, dim=1)
     pool_norm = torch.nn.functional.normalize(pool_tensor, p=2, dim=1)
     
     # matrix multiplication
+    # [Q, H] x [H, P] = [Q, P]
     sim_matrix = torch.mm(query_norm, pool_norm.t())
     
     mrr, recall = compute_mrr_recall(sim_matrix, gt)
     
-    model.train() # switch to training mode
+    model.train()
     return mrr, recall

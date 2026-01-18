@@ -3,16 +3,17 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from torch.optim import AdamW
-from transformers import AutoTokenizer, get_linear_schedule_with_warmup
+from transformers import get_linear_schedule_with_warmup
 from tqdm import tqdm
 
 from model import SmallBERT
-from dataset import BCSDTripletDataset
+from src.dataset_triplet import BCSDTripletDataset
 from utils_eval import evaluate_model
 import config
 
-EPOCHS = 5
-BATCH_SIZE = 32
+EPOCHS = 20
+EPOCH_SAMPLE_RATE = 40
+BATCH_SIZE = 512
 LR = 5e-5
 SAVE_DIR = os.path.join("data", "checkpoints", "baseline")
 BENCHMARK_DIR = os.path.join("data", "bcsd_benchmark")
@@ -41,14 +42,21 @@ class TripletCosineLoss(nn.Module):
 def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
-
-    print("Loading Tokenizer...")
-    tokenizer = AutoTokenizer.from_pretrained(config.TEACHER_MODEL_ID, trust_remote_code=True)
     
     print("Initializing Dataset...")
-    train_dataset = BCSDTripletDataset(tokenizer, projects=['clamav', 'curl', 'nmap', 'unrar'])
+    train_dataset = BCSDTripletDataset(
+        projects=['clamav', 'curl', 'nmap', 'unrar', 'zlib'],
+        epoch_sample_rate=EPOCH_SAMPLE_RATE
+    )
+
     # Iterable, len(train_loader)=N/B
-    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=0)
+    train_loader = DataLoader(
+        train_dataset, 
+        batch_size=BATCH_SIZE, 
+        shuffle=True, 
+        num_workers=8,
+        pin_memory=True
+    )
     
     print("Initializing SmallBERT Baseline...")
     model = SmallBERT().to(device)
@@ -106,7 +114,7 @@ def main():
         
         # evaluation
         print("Evaluating on Benchmark...")
-        mrr, recall = evaluate_model(model, tokenizer, device, BENCHMARK_DIR)
+        mrr, recall = evaluate_model(model, device, BENCHMARK_DIR)
         print(f"Result: MRR@10 = {mrr:.4f}, Recall@1 = {recall:.4f}")
         
         # save model
