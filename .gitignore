@@ -13,6 +13,7 @@ __pycache__/
 data/raw/
 # 忽略处理后的巨大JSON文件 (如果很大就忽略，小的话可以保留)
 data/
+logs/
 
 # 忽略训练产出 (日志和模型权重)
 outputs/

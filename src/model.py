@@ -12,7 +12,7 @@ class SmallBERT(nn.Module):
         self.config = BertConfig(
             vocab_size=vocab_size,          
             hidden_size=256,                    # Embedding Size
-            num_hidden_layers=6,                # Encoder layers
+            num_hidden_layers=4,                # Encoder layers
             num_attention_heads=8,              # Attention Heads (256 / 8 = 32 per head)
             intermediate_size=1024,             # FFN dimensions (hidden_size * 4)
             max_position_embeddings=max_length, # length of longest sequence
