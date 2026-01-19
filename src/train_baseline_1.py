@@ -17,8 +17,8 @@ LR = 5e-5
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(PROJECT_ROOT, "data")
-SAVE_DIR = os.path.join(DATA_DIR, "checkpoints", "baseline")
-BENCHMARK_DIR = os.path.join(DATA_DIR, "bcsd_benchmark")
+SAVE_DIR = os.path.join(DATA_DIR, "checkpoints", "baseline_1")
+BENCHMARK_DIR = os.path.join(DATA_DIR, "bcsd_benchmark_1")
 os.makedirs(SAVE_DIR, exist_ok=True)
 
 
@@ -47,7 +47,7 @@ def main():
     
     print("Initializing Dataset...")
     train_dataset = BCSDTripletDataset(
-        projects=['clamav', 'curl', 'nmap', 'unrar', 'zlib'],
+        projects=['nmap', 'openssl', 'unrar', 'zlib'],
         epoch_sample_rate=EPOCH_SAMPLE_RATE
     )
 

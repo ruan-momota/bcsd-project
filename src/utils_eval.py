@@ -4,6 +4,8 @@ from tqdm import tqdm
 import json
 import os
 
+BATCH_SIZE = 128
+
 def compute_mrr_recall(similarity_matrix, ground_truth, k=10):
 
     # similarity_matrix: [num_queries, pool_size] (Tensor or Numpy)
@@ -60,7 +62,7 @@ def evaluate_model(model, device, benchmark_dir):
 
     model.eval()
     
-    def get_embeddings(data_list, batch_size=512):
+    def get_embeddings(data_list, batch_size=BATCH_SIZE):
         vecs = []
         for i in range(0, len(data_list), batch_size):
             batch_items = data_list[i : i + batch_size]

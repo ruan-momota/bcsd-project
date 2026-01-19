@@ -12,17 +12,17 @@ from dataset_distill import DistillationDataset
 from utils_eval import evaluate_model
 import config
 
-EPOCHS = 10           # KD needs more epochs
-BATCH_SIZE = 32       # 2060 12G batch bigger, KD better
+EPOCHS = 20          
+BATCH_SIZE = 128   
 LR = 5e-5
 TEMPERATURE = 2.0     
 ALPHA = 1.0           # 1.0 = pure KD, 0.5 = KD+Triplet
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-STUDENT_PT = os.path.join(PROJECT_ROOT, "data", "outputs", "student_input.pt")
-TEACHER_PT = os.path.join(PROJECT_ROOT, "data", "outputs", "teacher_embeddings.pt")
+STUDENT_DIR = os.path.join(PROJECT_ROOT, "data", "outputs", "student", "128")
+TEACHER_DIR = os.path.join(PROJECT_ROOT, "data", "outputs", "teacher", "256")
 SAVE_DIR = os.path.join(PROJECT_ROOT, "data", "checkpoints", "distill_kl")
-BENCHMARK_DIR = os.path.join(PROJECT_ROOT, "data", "bcsd_benchmark")
+BENCHMARK_DIR = os.path.join(PROJECT_ROOT, "data", "bcsd_benchmark_1")
 
 os.makedirs(SAVE_DIR, exist_ok=True)
 
@@ -62,7 +62,7 @@ def main():
 
     print("Initializing Distillation Dataset...")
     # automatic alignment
-    train_dataset = DistillationDataset(STUDENT_PT, TEACHER_PT, train_projects=['clamav', 'curl', 'nmap', 'unrar'])
+    train_dataset = DistillationDataset(STUDENT_DIR, TEACHER_DIR, train_projects=['nmap','openssl','unrar','zlib'])
     
     train_loader = DataLoader(
         train_dataset, 
@@ -80,14 +80,14 @@ def main():
     kd_criterion = DistillationLoss(temperature=TEMPERATURE)
     
     total_steps = len(train_loader) * EPOCHS
-    scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=int(total_steps*0.1), num_training_steps=total_steps)
+    scheduler = get_linear_schedule_with_warmup(
+        optimizer, 
+        num_warmup_steps=int(total_steps*0.1), 
+        num_training_steps=total_steps
+    )
 
     best_mrr = 0.0
     print("Start Knowledge Distillation Training...")
-    
-
-    from transformers import AutoTokenizer
-    tokenizer = AutoTokenizer.from_pretrained(config.TEACHER_MODEL_ID, trust_remote_code=True)
     
     for epoch in range(EPOCHS):
         model.train()
@@ -120,7 +120,7 @@ def main():
         
         # evaluation
         print("Evaluating Student on BCSD Benchmark...")
-        mrr, recall = evaluate_model(model, tokenizer, device, BENCHMARK_DIR)
+        mrr, recall = evaluate_model(model, device, BENCHMARK_DIR)
         print(f"Student Result: MRR@10 = {mrr:.4f}, Recall@1 = {recall:.4f}")
         
         # save
