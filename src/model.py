@@ -3,7 +3,7 @@ import torch.nn as nn
 from transformers import BertConfig, BertModel
 
 class SmallBERT(nn.Module):
-    def __init__(self, vocab_size=33555, max_length=512, dropout_prob=0.1):
+    def __init__(self, vocab_size=33555, max_length=256, dropout_prob=0.1):
 
         super(SmallBERT, self).__init__()
         
@@ -16,7 +16,7 @@ class SmallBERT(nn.Module):
             num_attention_heads=8,              # Attention Heads (256 / 8 = 32 per head)
             intermediate_size=1024,             # FFN dimensions (hidden_size * 4)
             max_position_embeddings=max_length, # length of longest sequence
-            type_vocab_size=512,                  # token_type_ids (Segment embeddings)
+            type_vocab_size=256,                  # token_type_ids (Segment embeddings)
             hidden_dropout_prob=dropout_prob,
             attention_probs_dropout_prob=dropout_prob,
             pad_token_id=1                  

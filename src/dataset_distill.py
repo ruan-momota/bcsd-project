@@ -2,16 +2,30 @@ import torch
 from torch.utils.data import Dataset
 import os
 from tqdm import tqdm
+import json
+import config
 
 class DistillationDataset(Dataset):
-    def __init__(self, student_dir, teacher_dir, train_projects=None):
+    def __init__(self, student_dir, teacher_dir, train_projects=None, blocklist_file=None):
         self.inputs = []
-        
         all_input_ids = []
         all_attention_mask = []
         all_token_type_ids = []
         all_teacher_embeds = []
 
+        # blocklist
+        if blocklist_file is None:
+            blocklist_file = os.path.join(config.DATA_DIR, "outputs", "blocklist256.json")
+        
+        self.blocklist = set()
+        if os.path.exists(blocklist_file):
+            print(f"Loading blocklist from: {blocklist_file}")
+            with open(blocklist_file, 'r', encoding='utf-8') as f:
+                self.blocklist = set(json.load(f))
+        else:
+            print(f"[Warning] Blocklist file not found at {blocklist_file}. Proceeding without filtering.")
+
+        # load projects
         if not os.path.exists(student_dir):
             raise ValueError(f"Student directory does not exist: {student_dir}")
             
@@ -25,7 +39,8 @@ class DistillationDataset(Dataset):
         print(f"Loading data from projects: {projects_to_process}")
 
         total_files = 0
-        total_samples = 0
+        total_scanned = 0
+        skipped_count = 0
 
         for project in tqdm(projects_to_process, desc="Loading Projects"):
             s_proj_path = os.path.join(student_dir, project)
@@ -53,6 +68,8 @@ class DistillationDataset(Dataset):
                     print(f"Mismatch length in {project}/{pt_file}: Student {len(s_data)} vs Teacher {len(t_data)}")
                     continue
                 
+                total_scanned += len(s_data)
+
                 for i in range(len(s_data)):
                     s_item = s_data[i]
                     t_item = t_data[i]
@@ -60,6 +77,12 @@ class DistillationDataset(Dataset):
                     # double check
                     if s_item['func_name'] != t_item['func_name']:
                         print("diff func!!!")
+                        continue
+                
+                    # blocklist filter
+                    unique_key = f"{t_item['proj_name']}|{t_item['file_name']}|{t_item['func_name']}"
+                    if unique_key in self.blocklist:
+                        skipped_count += 1
                         continue
 
                     # Student Inputs
@@ -72,13 +95,16 @@ class DistillationDataset(Dataset):
                     all_teacher_embeds.append(t_item['teacher_embed'])
                     
                 total_files += 1
-                total_samples += len(s_data)
+
+        real_total_samples = len(all_input_ids)
 
         print(f"Data Loading Complete.")
         print(f"Processed Files: {total_files}")
-        print(f"Total Samples: {total_samples}")
+        print(f"Total Scanned Samples: {total_scanned}")
+        print(f"Skipped {skipped_count} dirty samples based on blocklist.")
+        print(f"Total Clean Samples Loaded: {real_total_samples}")
 
-        if total_samples == 0:
+        if real_total_samples == 0:
             raise ValueError("No valid training data found. Check your paths.")
 
         self.input_ids = torch.stack(all_input_ids)

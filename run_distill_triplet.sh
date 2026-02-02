@@ -1,11 +1,11 @@
 #!/bin/bash
-#SBATCH --job-name=dis_trip     
+#SBATCH --job-name=dis_tri    
 #SBATCH --output=logs/%j.out     
 #SBATCH --error=logs/%j.err          
 #SBATCH --partition=NvidiaAll        
 #SBATCH --nodes=1                  
 #SBATCH --ntasks=1                  
-#SBATCH --time=1440                 
+#SBATCH --time=960                 
 
 
 source /home/r/ruan/miniconda3/etc/profile.d/conda.sh

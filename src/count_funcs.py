@@ -25,10 +25,8 @@ def count_project_functions():
     for project_name in project_dirs:
         project_dir = os.path.join(INPUT_DIR, project_name)
         json_files = [f for f in os.listdir(project_dir) if f.endswith(".json")]
-        
         proj_raw_count = 0
         proj_valid_count = 0
-        
         iterator = tqdm(json_files, desc=project_name, leave=False) if len(json_files) > 100 else json_files
 
         for json_file in iterator:
@@ -51,7 +49,6 @@ def count_project_functions():
                 print(f"\nError reading {project_name}/{json_file}: {e}")
 
         print(f"{project_name:<20} | {len(json_files):<8} | {proj_raw_count:<12} | {proj_valid_count:<12}")
-        
         total_raw += proj_raw_count
         total_valid += proj_valid_count
         total_files += len(json_files)

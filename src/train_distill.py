@@ -13,17 +13,15 @@ from utils_eval import evaluate_model
 import config
 
 EPOCHS = 20          
-BATCH_SIZE = 128   
+BATCH_SIZE = 64   
 LR = 5e-5
 TEMPERATURE = 2.0     
 ALPHA = 1.0           # 1.0 = pure KD, 0.5 = KD+Triplet
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-STUDENT_DIR = os.path.join(PROJECT_ROOT, "data", "outputs", "student", "128")
-TEACHER_DIR = os.path.join(PROJECT_ROOT, "data", "outputs", "teacher", "256")
-SAVE_DIR = os.path.join(PROJECT_ROOT, "data", "checkpoints", "distill_kl")
-BENCHMARK_DIR = os.path.join(PROJECT_ROOT, "data", "bcsd_benchmark_1")
-
+STUDENT_DIR = os.path.join(config.DATA_DIR, "outputs", "student", "256")
+TEACHER_DIR = os.path.join(config.DATA_DIR, "outputs", "teacher", "256")
+SAVE_DIR = os.path.join(config.DATA_DIR, "checkpoints", "distill")
+BENCHMARK_DIR = os.path.join(config.DATA_DIR, "bcsd_benchmark")
 os.makedirs(SAVE_DIR, exist_ok=True)
 
 class DistillationLoss(nn.Module):
@@ -62,7 +60,7 @@ def main():
 
     print("Initializing Distillation Dataset...")
     # automatic alignment
-    train_dataset = DistillationDataset(STUDENT_DIR, TEACHER_DIR, train_projects=['nmap','openssl','unrar','zlib'])
+    train_dataset = DistillationDataset(STUDENT_DIR, TEACHER_DIR, train_projects=['openssl', 'clamav', 'zlib', 'nmap'])
     
     train_loader = DataLoader(
         train_dataset, 
@@ -120,7 +118,7 @@ def main():
         
         # evaluation
         print("Evaluating Student on BCSD Benchmark...")
-        mrr, recall = evaluate_model(model, device, BENCHMARK_DIR)
+        mrr, recall = evaluate_model(model, device, BENCHMARK_DIR, mode="val")
         print(f"Student Result: MRR@10 = {mrr:.4f}, Recall@1 = {recall:.4f}")
         
         # save
@@ -131,6 +129,26 @@ def main():
             print(f"New Best Student Model Saved! (MRR: {best_mrr:.4f})")
 
     print("Distillation Finished.")
+
+    print("\n=== Starting Final Evaluation on Test Set ===")
+    
+    best_model_path = os.path.join(SAVE_DIR, "best_student_model")
+    
+    try:
+        best_model = SmallBERT.from_pretrained(best_model_path)
+    except:
+        best_model = SmallBERT()
+        print("Warning: Could not use from_pretrained. Please check model loading logic.")
+    
+    best_model = best_model.to(device)
+    
+    test_mrr, test_recall = evaluate_model(best_model, device, BENCHMARK_DIR, mode="test")
+    
+    print(f"\n>>>>>> FINAL TEST RESULTS <<<<<<")
+    print(f"Model: {best_model_path}")
+    print(f"MRR@10   : {test_mrr:.4f}")
+    print(f"Recall@1 : {test_recall:.4f}")
+    print(f">>>>>>>>>>>>>><<<<<<<<<<<<<<")
 
 if __name__ == "__main__":
     main()

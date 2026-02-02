@@ -2,27 +2,38 @@ import torch
 from torch.utils.data import Dataset
 import random
 import os
+import json
 from collections import defaultdict
 import config
 from tqdm import tqdm
 
 class BCSDTripletDataset(Dataset):
-    def __init__(self, projects, max_length=128, epoch_sample_rate=40):
-        self.max_length = max_length
+    def __init__(self, projects, epoch_sample_rate=20, blocklist_file=None):
         self.projects = projects
         self.epoch_sample_rate = epoch_sample_rate
-        self.base_dir = os.path.join(config.DATA_DIR, "outputs", "student", str(self.max_length))
+        self.base_dir = os.path.join(config.DATA_DIR, "outputs", "student", "256")
         
+        if blocklist_file is None:
+            blocklist_file = os.path.join(config.DATA_DIR, "outputs", "blocklist256.json")
+
         self.samples = []                   
         self.groups = defaultdict(list)     # func_name -> list of indices in self.samples
+
+        # blocklist
+        self.blocklist = set()
+        if os.path.exists(blocklist_file):
+            with open(blocklist_file, 'r', encoding='utf-8') as f:
+                self.blocklist = set(json.load(f))
+        else:
+            print(f"[Warning] Blocklist file not found at {blocklist_file}. Proceeding without filtering.")
 
         print(f"Loading pre-tokenized data for projects: {self.projects}")
         
         total_files = 0
+        skipped_count = 0
         
         for proj_name in tqdm(self.projects, desc="Loading Projects"):
             proj_path = os.path.join(self.base_dir, proj_name)
-            
             if not os.path.exists(proj_path):
                 print(f"[Warning] Project directory not found: {proj_path}. Skipping.")
                 continue
@@ -37,11 +48,23 @@ class BCSDTripletDataset(Dataset):
                 file_path = os.path.join(proj_path, pt_file)
                 try:
                     chunk_data = torch.load(file_path)
+                    clean_chunk = []
+
+                    for item in chunk_data:
+                        unique_key = f"{item['proj_name']}|{item['file_name']}|{item['func_name']}"
+                        if unique_key in self.blocklist:
+                            skipped_count += 1
+                            continue
+
+                        clean_chunk.append(item)
                     
+                    if not clean_chunk:
+                        continue
+
                     start_idx = len(self.samples)
-                    self.samples.extend(chunk_data)
+                    self.samples.extend(clean_chunk)
                     
-                    for i, item in enumerate(chunk_data):
+                    for i, item in enumerate(clean_chunk):
                         global_idx = start_idx + i
                         func_name = item['func_name']
                         self.groups[func_name].append(global_idx)
@@ -55,6 +78,7 @@ class BCSDTripletDataset(Dataset):
         
         print(f"Processed {total_files} .pt files.")
         print(f"Total samples loaded: {len(self.samples)}")
+        print(f"Skipped {skipped_count} dirty samples based on blocklist.")
         print(f"Valid function groups (>=2 variants): {len(self.valid_func_names)}")
         
     def __len__(self):

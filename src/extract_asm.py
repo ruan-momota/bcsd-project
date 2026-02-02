@@ -3,7 +3,6 @@ import os
 
 def load_project_functions(project_path):
     results = []
-
     if not os.path.exists(project_path):
         return results
 
@@ -12,15 +11,13 @@ def load_project_functions(project_path):
 
     for file_name in json_files:
         file_path = os.path.join(project_path, file_name)
-
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 funcs = json.load(f)
             
             for func in funcs:
                 func_name = func.pop("function_name", None)
-
-                if len(func) <= 1: 
+                if len(func) <= 5: 
                     continue
 
                 results.append({
@@ -37,21 +34,18 @@ def load_project_functions(project_path):
 
 def load_single_file_functions(file_path):
     results = []
-
     if not os.path.exists(file_path):
         return results
 
     file_name = os.path.basename(file_path)
     proj_name = os.path.basename(os.path.dirname(file_path))
-
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
             funcs = json.load(f)
         
         for func in funcs:
             func_name = func.pop("function_name", None)
-
-            if len(func) <= 1: 
+            if len(func) <= 5: 
                 continue
 
             results.append({

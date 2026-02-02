@@ -6,13 +6,11 @@ import gc
 import config
 from extract_asm import load_single_file_functions
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATA_DIR = os.path.join(PROJECT_ROOT, "data")
-INPUT_DIR = os.path.join(DATA_DIR, "asm_x64")
-OUTPUT_DIR = os.path.join(DATA_DIR, "outputs", "student")
+INPUT_DIR = os.path.join(config.DATA_DIR, "asm_x64")
+OUTPUT_DIR = os.path.join(config.DATA_DIR, "outputs", "student")
 
 BATCH_SIZE = 32
-TOKENIZER_LEN = 128
+TOKENIZER_LEN = 256
 
 def load_clap_tokenizer():
     print(f"Loading model: {config.TEACHER_MODEL_ID} ...")
@@ -23,7 +21,7 @@ def save_file_data(data, proj_name, original_json_name):
     if not data:
         return
 
-    save_dir = os.path.join(OUTPUT_DIR, str(TOKENIZER_LEN), proj_name)
+    save_dir = os.path.join(OUTPUT_DIR, "256_5", proj_name)
     if not os.path.exists(save_dir):
         os.makedirs(save_dir, exist_ok=True)
         
@@ -38,8 +36,8 @@ def main():
     tokenizer = load_clap_tokenizer()
     tokenizer.model_max_length = TOKENIZER_LEN
 
-    project_dirs = [d for d in os.listdir(INPUT_DIR) if os.path.isdir(os.path.join(INPUT_DIR, d))]
-    
+    # filter z3
+    project_dirs = [d for d in os.listdir(INPUT_DIR) if os.path.isdir(os.path.join(INPUT_DIR, d)) and d != 'z3']
     print(f"Found {len(project_dirs)} projects.")
 
     for project_name in tqdm(project_dirs, desc="Projects"):

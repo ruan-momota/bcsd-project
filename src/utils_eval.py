@@ -48,17 +48,24 @@ def compute_mrr_recall(similarity_matrix, ground_truth, k=10):
     return mrr_score, recall_score
 
 @torch.no_grad()
-def evaluate_model(model, device, benchmark_dir):
+def evaluate_model(model, device, benchmark_dir, mode="val"):
+    data_dir = os.path.join(benchmark_dir, mode)
+    queries_path = os.path.join(data_dir, f"{mode}_queries.pt")
+    pool_path = os.path.join(data_dir, f"{mode}_pool.pt")
+    gt_path = os.path.join(data_dir, f"{mode}_ground_truth.json")
+
     try:
-        queries = torch.load(os.path.join(benchmark_dir, "bcsd_queries.pt"))
-        pool = torch.load(os.path.join(benchmark_dir, "bcsd_pool.pt"))
+        queries = torch.load(queries_path)
+        pool = torch.load(pool_path)
         
-        with open(os.path.join(benchmark_dir, "bcsd_ground_truth.json"), 'r') as f:
+        with open(gt_path, 'r') as f:
             gt = json.load(f)
             
     except FileNotFoundError as e:
-        print(f"Benchmark files not found: {e}")
+        print(f"Benchmark files not found in {data_dir}: {e}")
         return 0.0, 0.0
+
+    print(f"Evaluating on {mode.upper()} set (Queries: {len(queries)}, Pool: {len(pool)})...")
 
     model.eval()
     

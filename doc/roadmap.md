@@ -1,9 +1,7 @@
 # BCSD知识迁移
 
 目标：知识迁移，采用知识蒸馏，将sota的teacher model(CLAP-ASM)的高维语义知识蒸馏到一个轻量级的student model中。
-
 方法：对比baseline model和student model在BCSD任务上的表现。
-
 预估：student model的指标（MRR10）优于Baseline model，验证知识迁移的有效性。
 
 ## 1 数据预处理和知识准备
@@ -12,16 +10,16 @@
 
 - 使用IDA Pro和CLAP的process_asm.py在本地将二进制文件转换成rebase后的汇编
     - 每个二进制文件对应一个json格式的汇编文件，格式为[{},{}...]，每个元素对应一个函数
-    - process_asm.py的rebase将跳转指令后的loc_替换为INSTR加行号的相对地址
+    - process_asm.py有rebase算法将跳转指令后的loc_替换为INSTR加行号的相对地址
+    - CLAP-ASM的clap_modeling.py会利用INSTR+行号作为tokenize的位置输入
 
-- 先针对x64平台的二进制文件
+- 针对x64平台的二进制文件
 
 ### 1.2 student输入准备
 
 目标：将汇编转换为Student模型的Token ID列表
 
-- 基于1.1生成的json格式汇编，直接使用teacher模型CLAP-ASM的tokenizer生成input
-
+- 基于1.1生成的json格式汇编，直接使用teacher模型CLAP-ASM的tokenizer生成input_id
 - 检查生成的input，输出小部分内容到本地进行检查
 
 产出：由json格式汇编由tokenizer转换成的input，作为student和baseline模型的输入
@@ -31,10 +29,8 @@
 目标：利用CLAP-ASM模型为每个函数生成一个teacher语义向量
 
 - 从Hugging Face加载CLAP-ASM
-
 - 将1.1生成的json格式的汇编利用CLAP-ASM的tokenizer生成对应的input(encoding)
-
-- 利用teacher模型CLAP-ASM的encoder将input生成对应的知识向量
+- 利用teacher模型CLAP-ASM的encoder将input生成对应的embedding
 
 产出：知识矩阵teacher_target，作为知识蒸馏的目标
 
@@ -56,23 +52,18 @@
 ### 3.1 数据集划分
 
 - 按项目划分
-
 - 训练集：clamav,curl,nmap
 - 测试集：zlib,openssl
 
 ### 3.2 BCSD评估
 
 - 使用测试集
-
-- 定义正样本：比如给定义一个函数，正样本是其他编译器，优化等级下的该函数
+- 定义正样本：比如给定一个函数，正样本是不同编译器或不同优化等级下的该函数
 - 定义负样本：所有非该函数
 
 - 随机选择1000个函数作为查询集
-
 - 随机选取100000个函数构建candidate pool
-
 - 生成Ground Truth（json文件），映射每个Query在Pool中的正确候选项。
-
 - 评估函数：计算Query和Pool向量的余弦相似度，并对照Ground Truth计算MRR10和Recall@1
 
 ## 4 Baseline的训练和评估
@@ -86,10 +77,10 @@
 ### 4.2 训练Baseline
 
 - 输入：从训练集动态采样三元组（Anchor, Positive, Negative）。（输入是三个函数的encoding）
-
 - 过程：SmallBERT分别计算三个序列的嵌入向量
-
 - 损失函数：TripletLoss，使(Anchor, Positive)距离最小化，（Anchor, Nagative）距离最大化
+
+损失函数或许应该只用MLM，不用TripletLoss
 
 ### 4.3 评估Baseline
 
@@ -144,17 +135,20 @@
 - 评估
     - 每训练1个Epoch，在BCSD测试集验证，对比student的MRR是否超过Baseline
 
-
 ### 5.2 模型评估
 
 - 将Student Model在测试集上运行BCSD评估。
 
 产出：student model的MRR10和Recall@1
 
+### 5.3 微调
+
+- 对KD预训练的模型进行TripletLoss微调
+
 ## 6 分析
 
-- 对比Baseline和Student Model的MRR10和Recall@1
+- 对比只使用MLM的Baseline，经过KD的Student Model，经过KD和微调的Student Model
 
-- 期望：Student_MRR10 > Baseline_MRR10
+- 期望：微调 > KD > Baseline
 
 
