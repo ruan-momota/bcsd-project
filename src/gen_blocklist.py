@@ -3,11 +3,10 @@ import torch
 import json
 import hashlib
 from tqdm import tqdm
+import config
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATA_DIR = os.path.join(PROJECT_ROOT, "data")
-INPUT_DIR = os.path.join(DATA_DIR, "outputs", "teacher", "128")
-BLOCKLIST_FILE = os.path.join(DATA_DIR, "outputs", "blocklist128.json")
+INPUT_DIR = os.path.join(config.DATA_DIR, "outputs", "teacher", "256_5")
+BLOCKLIST_FILE = os.path.join(config.DATA_DIR, "outputs", "blocklist256_5.json")
 EXCLUDE_PROJECTS = ["z3"]
 
 def get_embedding_fingerprint(tensor):
@@ -22,7 +21,7 @@ def main():
     blocklist = []
     
     stats = {
-        "total": 0, 
+        "total": 0, # func
         "kept": 0, 
         "dirty_dup": 0,   
         "exact_dup": 0     
@@ -45,7 +44,6 @@ def main():
 
             for item in data:
                 stats["total"] += 1
-                
                 proj_name = item['proj_name']
                 unique_key = f"{proj_name}|{item['file_name']}|{item['func_name']}"
                 fp = get_embedding_fingerprint(item['teacher_embed'])

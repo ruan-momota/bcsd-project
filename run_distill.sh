@@ -5,7 +5,7 @@
 #SBATCH --partition=NvidiaAll        
 #SBATCH --nodes=1                  
 #SBATCH --ntasks=1                  
-#SBATCH --time=480
+#SBATCH --time=1440
 
 
 source /home/r/ruan/miniconda3/etc/profile.d/conda.sh

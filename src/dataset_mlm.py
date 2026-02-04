@@ -7,9 +7,9 @@ import config
 
 class BCSDMLMDataset(Dataset):
     def __init__(self, projects, blocklist_file=None):
-        self.base_dir = os.path.join(config.DATA_DIR, "outputs", "student", "256")
+        self.base_dir = os.path.join(config.DATA_DIR, "outputs", "student", "256_5")
         if blocklist_file is None:
-            blocklist_file = os.path.join(config.DATA_DIR, "outputs", "blocklist256.json")
+            blocklist_file = os.path.join(config.DATA_DIR, "outputs", "blocklist256_5.json")
         self.blocklist = set()
         if os.path.exists(blocklist_file):
             with open(blocklist_file, 'r', encoding='utf-8') as f:

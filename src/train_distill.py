@@ -6,10 +6,9 @@ from torch.utils.data import DataLoader
 from torch.optim import AdamW
 from transformers import get_linear_schedule_with_warmup
 from tqdm import tqdm
-
 from model import SmallBERT
 from dataset_distill import DistillationDataset
-from utils_eval import evaluate_model
+from model_eval import evaluate_model
 import config
 
 EPOCHS = 20          
@@ -18,10 +17,10 @@ LR = 5e-5
 TEMPERATURE = 2.0     
 ALPHA = 1.0           # 1.0 = pure KD, 0.5 = KD+Triplet
 
-STUDENT_DIR = os.path.join(config.DATA_DIR, "outputs", "student", "256")
-TEACHER_DIR = os.path.join(config.DATA_DIR, "outputs", "teacher", "256")
-SAVE_DIR = os.path.join(config.DATA_DIR, "checkpoints", "distill")
-BENCHMARK_DIR = os.path.join(config.DATA_DIR, "bcsd_benchmark")
+STUDENT_DIR = os.path.join(config.DATA_DIR, "outputs", "student", "256_5")
+TEACHER_DIR = os.path.join(config.DATA_DIR, "outputs", "teacher", "256_5")
+SAVE_DIR = os.path.join(config.DATA_DIR, "checkpoints", "disti")
+BENCHMARK_DIR = os.path.join(config.DATA_DIR, "bcsd_benchmark_5")
 os.makedirs(SAVE_DIR, exist_ok=True)
 
 class DistillationLoss(nn.Module):
@@ -84,7 +83,7 @@ def main():
         num_training_steps=total_steps
     )
 
-    best_mrr = 0.0
+    best_map = 0.0
     print("Start Knowledge Distillation Training...")
     
     for epoch in range(EPOCHS):
@@ -117,22 +116,23 @@ def main():
         print(f"Epoch {epoch+1} finished. Avg KD Loss: {avg_loss:.4f}")
         
         # evaluation
-        print("Evaluating Student on BCSD Benchmark...")
-        mrr, recall = evaluate_model(model, device, BENCHMARK_DIR, mode="val")
-        print(f"Student Result: MRR@10 = {mrr:.4f}, Recall@1 = {recall:.4f}")
+        eval_results = evaluate_model(model, device, BENCHMARK_DIR, mode="val")
+        current_map = eval_results.get("Map@50", 0.0)
+        current_pre = eval_results.get("R-Precision", 0.0)
+        print(f"Result: Map@50 = {current_map:.4f}, R-Precision = {current_pre:.4f}")
         
         # save
-        if mrr > best_mrr:
-            best_mrr = mrr
-            save_path = os.path.join(SAVE_DIR, "best_student_model")
+        if current_map > best_map:
+            best_map = current_map
+            save_path = os.path.join(SAVE_DIR, "student_model")
             model.save_pretrained(save_path)
-            print(f"New Best Student Model Saved! (MRR: {best_mrr:.4f})")
+            print(f"New Best Distillation Model Saved to {save_path}!")
 
     print("Distillation Finished.")
 
     print("\n=== Starting Final Evaluation on Test Set ===")
     
-    best_model_path = os.path.join(SAVE_DIR, "best_student_model")
+    best_model_path = os.path.join(SAVE_DIR, "student_model")
     
     try:
         best_model = SmallBERT.from_pretrained(best_model_path)
@@ -142,13 +142,14 @@ def main():
     
     best_model = best_model.to(device)
     
-    test_mrr, test_recall = evaluate_model(best_model, device, BENCHMARK_DIR, mode="test")
+    test_results = evaluate_model(best_model, device, BENCHMARK_DIR, mode="test")
     
     print(f"\n>>>>>> FINAL TEST RESULTS <<<<<<")
-    print(f"Model: {best_model_path}")
-    print(f"MRR@10   : {test_mrr:.4f}")
-    print(f"Recall@1 : {test_recall:.4f}")
+    print(f"Student Model: {best_model_path}")
+    for metric_name, score in test_results.items():
+        print(f"{metric_name:<15}: {score:.4f}")
     print(f">>>>>>>>>>>>>><<<<<<<<<<<<<<")
+
 
 if __name__ == "__main__":
     main()

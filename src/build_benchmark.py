@@ -4,24 +4,23 @@ import json
 import torch
 from collections import defaultdict
 from tqdm import tqdm
+import config
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATA_DIR = os.path.join(PROJECT_ROOT, "data")
-INPUT_DIR = os.path.join(DATA_DIR, "outputs", "student", "256")
-BLOCKLIST_FILE = os.path.join(DATA_DIR, "outputs", "blocklist256.json")
-OUTPUT_DIR = os.path.join(DATA_DIR, "bcsd_benchmark")
+INPUT_DIR = os.path.join(config.DATA_DIR, "outputs", "student", "256_5")
+BLOCKLIST_FILE = os.path.join(config.DATA_DIR, "outputs", "blocklist256_5.json")
+OUTPUT_DIR = os.path.join(config.DATA_DIR, "bcsd_benchmark_5")
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-TRAIN_PROJECTS = ['openssl', 'clamav', 'zlib']
+TRAIN_PROJECTS = ['openssl', 'clamav', 'zlib', 'nmap']
 
-VAL_PROJECTS = ['unrar']
+VAL_PROJECTS = ['unrar'] # 14120
 VAL_POOL_SIZE = 10000
 VAL_NUM_QUERIES = 1000
 
-TEST_PROJECTS = ['curl']
+TEST_PROJECTS = ['curl'] # 21186
 TEST_POOL_SIZE = 10000
 TEST_NUM_QUERIES = 1000
 
-os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 def load_preprocessed_project(proj_name, blocklist=None):
     proj_dir = os.path.join(INPUT_DIR, proj_name)
@@ -102,12 +101,12 @@ def build_retrieval_set(projects, pool_size, num_queries, mode, blocklist):
         print(f"[Warning] Not enough functions for requested Pool Size {pool_size}. Using max available: {len(all_funcs)}")
         pool_size = len(all_funcs)
 
-    # 1. Group by Function Name
+    # Group by Function Name
     func_name_to_indices = defaultdict(list)
     for idx, item in enumerate(all_funcs):
         func_name_to_indices[item['func_name']].append(idx)
         
-    # 2. Filter valid queries (Must have >= 2 compiled versions)
+    # Filter valid queries (Must have >= 2 compiled versions)
     valid_query_names = [k for k, v in func_name_to_indices.items() if len(v) >= 2]
     print(f"  - Unique function names with >= 2 variants: {len(valid_query_names)}")
     
@@ -115,10 +114,9 @@ def build_retrieval_set(projects, pool_size, num_queries, mode, blocklist):
         print(f"[Error] Not enough valid query candidates in {projects}!")
         return
 
-    # 3. Select Queries
+    # Select Queries
     actual_num_queries = min(num_queries, len(valid_query_names))
     random.seed(42) # Fixed seed for reproducibility
-    
     selected_query_names = random.sample(valid_query_names, actual_num_queries)
     
     queries = []       
@@ -140,7 +138,7 @@ def build_retrieval_set(projects, pool_size, num_queries, mode, blocklist):
             if v_idx != q_idx:
                 pool_indices.add(v_idx)
                 
-    # 4. Fill the rest of the Pool with distractors
+    # Fill the rest of the Pool with distractors
     # Candidates are those NOT used as queries and NOT already in pool
     remaining_indices = []
     for i in range(len(all_funcs)):
@@ -158,11 +156,11 @@ def build_retrieval_set(projects, pool_size, num_queries, mode, blocklist):
     else:
         print(f"  - [Note] Pool already larger than requested size due to variants ({len(pool_indices)})")
     
-    # 5. Extract Pool Items
+    # Extract Pool Items
     final_pool_indices_list = list(pool_indices)
     pool_candidates = [all_funcs[i] for i in final_pool_indices_list]
     
-    # 6. Generate Ground Truth
+    # Generate Ground Truth
     # Format: {"0": [pool_idx_1, pool_idx_2], "1": [...]}
     ground_truth = {} 
     
@@ -188,13 +186,13 @@ if __name__ == "__main__":
     # Load blocklist once
     blk = load_blocklist()
     
-    # 1. Build Training Set
+    # Build Training Set
     # build_training_set(blk)
     
-    # 2. Build Validation Set (Unrar)
+    # Build Validation Set (Unrar)
     build_retrieval_set(VAL_PROJECTS, VAL_POOL_SIZE, VAL_NUM_QUERIES, "val", blk)
     
-    # 3. Build Test Set (Curl)
+    # Build Test Set (Curl)
     build_retrieval_set(TEST_PROJECTS, TEST_POOL_SIZE, TEST_NUM_QUERIES, "test", blk)
     
     print("\nAll datasets built successfully!")

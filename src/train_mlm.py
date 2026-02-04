@@ -8,7 +8,7 @@ from tqdm import tqdm
 import random
 
 from dataset_mlm import BCSDMLMDataset
-from utils_eval import evaluate_model
+from model_eval import evaluate_model
 from model import SmallBERT
 import config
 
@@ -19,7 +19,7 @@ MASK_PROB = 0.15
 PAD_TOKEN_ID = 1 
 MASK_TOKEN_ID = 5
 SAVE_DIR = os.path.join(config.DATA_DIR, "checkpoints", "mlm")
-BENCHMARK_DIR = os.path.join(config.DATA_DIR, "bcsd_benchmark")
+BENCHMARK_DIR = os.path.join(config.DATA_DIR, "bcsd_benchmark_5")
 os.makedirs(SAVE_DIR, exist_ok=True)
 
 def collate_mlm(batch):
@@ -79,7 +79,7 @@ def main():
     total_steps = len(loader) * EPOCHS
     scheduler = get_linear_schedule_with_warmup(optimizer, int(total_steps*0.1), total_steps)
     
-    best_mrr = 0.0
+    best_map = 0.0
 
     print("Start MLM Training...")
     
@@ -119,21 +119,23 @@ def main():
         eval_model = SmallBERT().to(device)
         eval_model.bert = model.bert # share encoder weight
         
-        mrr, recall = evaluate_model(eval_model, device, BENCHMARK_DIR, mode="val")
-        print(f"Val Retrieval: MRR={mrr:.4f}, Recall={recall:.4f}")
+        eval_results = evaluate_model(model, device, BENCHMARK_DIR, mode="val")
+        current_map = eval_results.get("Map@50", 0.0)
+        current_pre = eval_results.get("R-Precision", 0.0)
+        print(f"Result: Map@50 = {current_map:.4f}, R-Precision = {current_pre:.4f}")
         
         # Save Best Model
-        if mrr > best_mrr:
-            best_mrr = mrr
-            save_path = os.path.join(SAVE_DIR, "best_mlm_model")
-            model.bert.save_pretrained(save_path)
-            print(f"Saved best encoder to {save_path}")
+        if current_map > best_map:
+            best_map = current_map
+            save_path = os.path.join(SAVE_DIR, "mlm_model")
+            model.save_pretrained(save_path)
+            print(f"New Best MLM Model Saved to {save_path}!")
 
     print("MLM Training Finished.")
     
     print("\n=== Starting Final Evaluation on Test Set ===")
     
-    best_model_path = os.path.join(SAVE_DIR, "best_mlm_model")
+    best_model_path = os.path.join(SAVE_DIR, "mlm_model")
     
     try:
         best_model = SmallBERT.from_pretrained(best_model_path)
@@ -143,12 +145,12 @@ def main():
         print(f"Error loading model: {e}")
         return
 
-    test_mrr, test_recall = evaluate_model(best_model, device, BENCHMARK_DIR, mode="test")
+    test_results = evaluate_model(best_model, device, BENCHMARK_DIR, mode="test")
     
-    print(f"\n>>>>>> FINAL TEST RESULTS (MLM Zero-shot) <<<<<<")
-    print(f"Model Source: {best_model_path}")
-    print(f"MRR@10      : {test_mrr:.4f}")
-    print(f"Recall@1    : {test_recall:.4f}")
+    print(f"\n>>>>>> FINAL TEST RESULTS <<<<<<")
+    print(f"Student Model: {best_model_path}")
+    for metric_name, score in test_results.items():
+        print(f"{metric_name:<15}: {score:.4f}")
     print(f">>>>>>>>>>>>>><<<<<<<<<<<<<<")
 
 if __name__ == "__main__":

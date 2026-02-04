@@ -154,6 +154,23 @@ Kept Functions by Project (Descending):
   unrar               : 14510
   zlib                : 4668
 
+改为去除少于5行的函数：
+========================================
+Global Statistics:
+  Total Processed:    879834
+  Kept (Unique):      390114
+  Blocked (Dirty):    54463 (Same Body, Diff Name)
+  Blocked (Exact):    435257 (Same Body, Same Name)
+  Total Filtered Rate: 55.66%
+----------------------------------------
+Kept Functions by Project (Descending):
+  openssl             : 171628
+  nmap                : 131835
+  clamav              : 46878
+  curl                : 21186
+  unrar               : 14120
+  zlib                : 4467
+
 - 使用128 teacher，算z3
 去除脏数据后（同名或不同名，函数体相同的）
 
@@ -216,3 +233,43 @@ Recall : 0.9440
 
 78042 NvidiaAll  tea2565     ruan PD       0:00      1 (Priority)
 78043 NvidiaAll  stu2565     ruan PD       0:00      1 (Priority)
+
+
+### banchmark_5
+
+========================================
+Global Statistics:
+  Total Processed:    879834
+  Kept (Unique):      390114
+  Blocked (Dirty):    54463 (Same Body, Diff Name)
+  Blocked (Exact):    435257 (Same Body, Same Name)
+  Total Filtered Rate: 55.66%
+----------------------------------------
+Kept Functions by Project (Descending):
+  openssl             : 171628
+  nmap                : 131835
+  clamav              : 46878
+  curl                : 21186
+  unrar               : 14120
+  zlib                : 4467
+
+Teacher Precomputed Benchmark Result:
+MRR    : 0.9646
+Recall : 0.9480
+
+test ground truth:
+min: 1
+max: 39
+mean: 17.336
+
+val ground truth:
+min: 1
+max: 39
+mean: 16.6203007518797
+
+(bcsd) ruan@citrin:~/binai/bcsd-project (0) [16:19:30] % sbatch run_baseline.sh 
+Submitted batch job 78230
+(bcsd) ruan@citrin:~/binai/bcsd-project (0) [16:19:51] % sbatch run_distill.sh
+Submitted batch job 78231
+(bcsd) ruan@citrin:~/binai/bcsd-project (0) [16:20:24] % sbatch run_mlm.sh    
+Submitted batch job 78232

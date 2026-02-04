@@ -7,7 +7,7 @@ from transformers import get_linear_schedule_with_warmup
 from tqdm import tqdm
 from model import SmallBERT
 from dataset_triplet import BCSDTripletDataset
-from utils_eval import evaluate_model
+from model_eval import evaluate_model
 import config
 
 EPOCHS = 20                 

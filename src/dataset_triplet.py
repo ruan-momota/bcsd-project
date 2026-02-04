@@ -8,13 +8,13 @@ import config
 from tqdm import tqdm
 
 class BCSDTripletDataset(Dataset):
-    def __init__(self, projects, epoch_sample_rate=20, blocklist_file=None):
+    def __init__(self, projects, epoch_sample_rate=15, blocklist_file=None):
         self.projects = projects
         self.epoch_sample_rate = epoch_sample_rate
-        self.base_dir = os.path.join(config.DATA_DIR, "outputs", "student", "256")
+        self.base_dir = os.path.join(config.DATA_DIR, "outputs", "student", "256_5")
         
         if blocklist_file is None:
-            blocklist_file = os.path.join(config.DATA_DIR, "outputs", "blocklist256.json")
+            blocklist_file = os.path.join(config.DATA_DIR, "outputs", "blocklist256_5.json")
 
         self.samples = []                   
         self.groups = defaultdict(list)     # func_name -> list of indices in self.samples

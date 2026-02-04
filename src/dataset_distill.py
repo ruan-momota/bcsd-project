@@ -15,7 +15,7 @@ class DistillationDataset(Dataset):
 
         # blocklist
         if blocklist_file is None:
-            blocklist_file = os.path.join(config.DATA_DIR, "outputs", "blocklist256.json")
+            blocklist_file = os.path.join(config.DATA_DIR, "outputs", "blocklist256_5.json")
         
         self.blocklist = set()
         if os.path.exists(blocklist_file):

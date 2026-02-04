@@ -7,17 +7,16 @@ from transformers import get_linear_schedule_with_warmup
 from tqdm import tqdm
 from model import SmallBERT
 from dataset_triplet import BCSDTripletDataset
-from utils_eval import evaluate_model
+from model_eval import evaluate_model
+import config
 
 EPOCHS = 20
-EPOCH_SAMPLE_RATE = 20
+EPOCH_SAMPLE_RATE = 15
 BATCH_SIZE = 64
 LR = 5e-5
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATA_DIR = os.path.join(PROJECT_ROOT, "data")
-SAVE_DIR = os.path.join(DATA_DIR, "checkpoints", "baseline")
-BENCHMARK_DIR = os.path.join(DATA_DIR, "bcsd_benchmark")
+SAVE_DIR = os.path.join(config.DATA_DIR, "checkpoints", "baseline")
+BENCHMARK_DIR = os.path.join(config.DATA_DIR, "bcsd_benchmark_5")
 os.makedirs(SAVE_DIR, exist_ok=True)
 
 class TripletCosineLoss(nn.Module):
@@ -66,7 +65,7 @@ def main():
     total_steps = len(train_loader) * EPOCHS
     scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=int(total_steps*0.1), num_training_steps=total_steps)
 
-    best_mrr = 0.0
+    best_map = 0.0
     
     print("Start Training...")
     for epoch in range(EPOCHS):
@@ -112,12 +111,14 @@ def main():
         print(f"Epoch {epoch+1} finished. Avg Loss: {avg_loss:.4f}")
         
         # evaluation
-        mrr, recall = evaluate_model(model, device, BENCHMARK_DIR, mode="val")
-        print(f"Result: MRR@10 = {mrr:.4f}, Recall@1 = {recall:.4f}")
+        eval_results = evaluate_model(model, device, BENCHMARK_DIR, mode="val")
+        current_map = eval_results.get("Map@50", 0.0)
+        current_pre = eval_results.get("R-Precision", 0.0)
+        print(f"Result: Map@50 = {current_map:.4f}, R-Precision = {current_pre:.4f}")
         
         # save model
-        if mrr > best_mrr:
-            best_mrr = mrr
+        if current_map > best_map:
+            best_map = current_map
             save_path = os.path.join(SAVE_DIR, "baseline_model")
             model.save_pretrained(save_path)
             print(f"New Best Baseline Model Saved to {save_path}!")
@@ -135,13 +136,12 @@ def main():
         print("Warning: Could not use from_pretrained. Please check model loading logic.")
     
     best_model = best_model.to(device)
-    
-    test_mrr, test_recall = evaluate_model(best_model, device, BENCHMARK_DIR, mode="test")
+    test_results = evaluate_model(best_model, device, BENCHMARK_DIR, mode="test")
     
     print(f"\n>>>>>> FINAL TEST RESULTS <<<<<<")
-    print(f"Model: {best_model_path}")
-    print(f"MRR@10   : {test_mrr:.4f}")
-    print(f"Recall@1 : {test_recall:.4f}")
+    print(f"Baseline Model: {best_model_path}")
+    for metric_name, score in test_results.items():
+        print(f"{metric_name:<15}: {score:.4f}")
     print(f">>>>>>>>>>>>>><<<<<<<<<<<<<<")
 
 if __name__ == "__main__":

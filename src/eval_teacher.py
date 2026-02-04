@@ -4,49 +4,77 @@ import json
 import numpy as np
 from tqdm import tqdm
 from collections import defaultdict
+import config
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATA_DIR = os.path.join(PROJECT_ROOT, "data")
-BENCHMARK_DIR = os.path.join(DATA_DIR, "bcsd_benchmark", "test")
-TEACHER_OUTPUT_ROOT = os.path.join(DATA_DIR, "outputs", "teacher", "256")
+BENCHMARK_DIR = os.path.join(config.DATA_DIR, "bcsd_benchmark_5", "test")
+TEACHER_OUTPUT_ROOT = os.path.join(config.DATA_DIR, "outputs", "teacher", "256_5")
 TARGET_PROJECTS = ['curl'] 
 
-def compute_mrr_recall(similarity_matrix, ground_truth, k=10):
-
+def compute_metrics(similarity_matrix, ground_truth, k_list=[1,10,20,50]):
     if isinstance(similarity_matrix, torch.Tensor):
         similarity_matrix = similarity_matrix.cpu().numpy()
         
-    mrr_sum = 0.0
-    recall_hits = 0
-    num_queries = len(ground_truth)
-    sorted_indices = np.argsort(-similarity_matrix, axis=1)
+    metrics = {
+        f"Map@{k}": 0.0 for k in k_list
+    }
+    metrics.update({f"Ndcg@{k}": 0.0 for k in k_list})
+    metrics.update({f"Precision@{k}": 0.0 for k in k_list})
+    metrics.update({f"Recall@{k}": 0.0 for k in k_list})
+    metrics["R-Precision"] = 0.0 
     
-    for q_idx, candidates in enumerate(sorted_indices):
-        q_idx_str = str(q_idx)
+    num_queries = len(ground_truth)
+    max_k = max(k_list)
+    safe_depth = max(max_k, 200)
+    
+    sorted_indices = np.argsort(-similarity_matrix, axis=1)[:, :safe_depth]
+    
+    for q_idx_int, candidates in enumerate(sorted_indices):
+        q_idx_str = str(q_idx_int)
         if q_idx_str not in ground_truth:
             continue
             
         correct_pool_ids = set(ground_truth[q_idx_str])
+        total_rel = len(correct_pool_ids)  # R
         
-        # --- Recall@1 ---
-        if candidates[0] in correct_pool_ids:
-            recall_hits += 1
-            
-        # --- MRR@K ---
-        rank = -1
-        top_k = candidates[:k]
-        for i, pool_id in enumerate(top_k):
-            if pool_id in correct_pool_ids:
-                rank = i + 1 
-                break
+        if total_rel == 0:
+            continue
+
+        # --- R-Precision 计算 ---
+        r_cutoff = min(total_rel, safe_depth)
+        r_candidates = candidates[:r_cutoff]
+        r_hits_count = np.sum([1 if c in correct_pool_ids else 0 for c in r_candidates])
+        metrics["R-Precision"] += r_hits_count / total_rel
+
+        hits = np.array([1 if c in correct_pool_ids else 0 for c in candidates[:max_k]])
         
-        if rank != -1:
-            mrr_sum += 1.0 / rank
+        for k in k_list:
+            hits_k = hits[:k]
+            num_hits = np.sum(hits_k)
             
-    mrr_score = mrr_sum / num_queries
-    recall_score = recall_hits / num_queries
-    
-    return mrr_score, recall_score
+            # Precision@K
+            metrics[f"Precision@{k}"] += num_hits / k
+            
+            # Recall@K
+            metrics[f"Recall@{k}"] += num_hits / total_rel
+            
+            # MAP@K
+            if num_hits > 0:
+                precisions = np.cumsum(hits_k) / np.arange(1, k + 1)
+                ap = np.sum(precisions * hits_k) / min(k, total_rel)
+                metrics[f"Map@{k}"] += ap
+            
+            # NDCG@K
+            if num_hits > 0:
+                dcg = np.sum((2**hits_k - 1) / np.log2(np.arange(2, k + 2)))
+                ideal_hits = np.zeros(k)
+                ideal_hits[:min(k, total_rel)] = 1
+                idcg = np.sum((2**ideal_hits - 1) / np.log2(np.arange(2, k + 2)))
+                metrics[f"Ndcg@{k}"] += dcg / idcg
+
+    for key in metrics:
+        metrics[key] /= num_queries
+        
+    return metrics
 
 def load_teacher_embeddings_map():
     print(f"Scanning Teacher Embeddings in: {TEACHER_OUTPUT_ROOT} ...")
@@ -106,7 +134,7 @@ def align_data_with_embeddings(data_list, embedding_map, name="Data"):
 def main():
     print(f"Checking Benchmark Directory: {BENCHMARK_DIR}")
     if not os.path.exists(BENCHMARK_DIR):
-        print("Benchmark directory not found. Please run build_benchmark_1.py first.")
+        print("Benchmark directory not found. Please run build_benchmark.py first.")
         return
 
     print("Loading Benchmark Metadata...")
@@ -143,12 +171,12 @@ def main():
     sim_matrix = torch.mm(query_norm, pool_norm.t())
 
     print("Computing Metrics...")
-    mrr, recall = compute_mrr_recall(sim_matrix, gt)
+    results = compute_metrics(sim_matrix, gt, k_list=[1, 10, 20, 50])
 
     print("\n" + "="*40)
     print(f"Teacher Precomputed Benchmark Result:")
-    print(f"MRR    : {mrr:.4f}")
-    print(f"Recall : {recall:.4f}")
+    for metric, score in results.items():
+        print(f"{metric:<15}: {score:.4f}")
     print("="*40)
 
 if __name__ == "__main__":
