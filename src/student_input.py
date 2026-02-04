@@ -1,104 +1,93 @@
 import os
-import json
 import torch
 from transformers import AutoTokenizer
 from tqdm import tqdm
-import glob
+import gc
 import config
+from extract_asm import load_single_file_functions
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATA_DIR = os.path.join(PROJECT_ROOT, "data")
-INPUT_DIR = os.path.join(DATA_DIR, "asm_x64", "unrar")
-OUTPUT_FILE = os.path.join(DATA_DIR, "outputs", "student_input.pt")
-TEACHER_MODEL_ID = "hustcw/clap-asm"
+INPUT_DIR = os.path.join(config.DATA_DIR, "asm_x64")
+OUTPUT_DIR = os.path.join(config.DATA_DIR, "outputs", "student")
 
+BATCH_SIZE = 32
+TOKENIZER_LEN = 256
 
 def load_clap_tokenizer():
     print(f"Loading model: {config.TEACHER_MODEL_ID} ...")
     tokenizer = AutoTokenizer.from_pretrained(config.TEACHER_MODEL_ID, trust_remote_code=True)
     return tokenizer
 
-def main():
-    tokenizer = load_clap_tokenizer()
-    tokenizer.model_max_length = 512
-
-    # read asm .json files
-    json_files = glob.glob(os.path.join(INPUT_DIR, "*.json"))
-    if not json_files:
-        print(f"Error: no asm .json files found in {INPUT_DIR}!")
+def save_file_data(data, proj_name, original_json_name):
+    if not data:
         return
 
-    json_files = json_files[:1] # for test!!!
-    
-    print(f"Start processing {len(json_files)} asm files...")
-
-    all_input_ids = []
-    all_attention_masks = []
-    all_token_type_ids = []
-    metadata_list = []
-
-    # traverse every asm .json file
-    for json_path in tqdm(json_files, desc="Processing Files"):
+    save_dir = os.path.join(OUTPUT_DIR, "256_5", proj_name)
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir, exist_ok=True)
         
-        path_parts = json_path.split(os.sep)
-        file_name = path_parts[-1]
-        project_name = path_parts[-2]
+    pt_filename = original_json_name.replace(".json", ".pt")
+    if not pt_filename.endswith(".pt"):
+        pt_filename += ".pt"
         
-        with open(json_path, 'r', encoding='utf-8') as f:
-            functions_list = json.load(f)
+    file_path = os.path.join(save_dir, pt_filename)
+    torch.save(data, file_path)
 
-        # batch data for current file
-        batch_texts = []
+def main():
+    tokenizer = load_clap_tokenizer()
+    tokenizer.model_max_length = TOKENIZER_LEN
+
+    # filter z3
+    project_dirs = [d for d in os.listdir(INPUT_DIR) if os.path.isdir(os.path.join(INPUT_DIR, d)) and d != 'z3']
+    print(f"Found {len(project_dirs)} projects.")
+
+    for project_name in tqdm(project_dirs, desc="Projects"):
+        project_dir = os.path.join(INPUT_DIR, project_name)
+        json_files = [f for f in os.listdir(project_dir) if f.endswith(".json")]
         
-        for func in functions_list:
-            func_name = func.get('function_name')
-            metadata_list.append({
-                "project": project_name,
-                "file_name": file_name,
-                "func_name": func_name
-            })
-
-            func_input = func.copy()
-            func_input.pop("function_name", None)
-            batch_texts.append(func_input)
-
-        for i in range(0, len(batch_texts), config.BATCH_SIZE):
-            batch_data = batch_texts[i : i + config.BATCH_SIZE]
+        for json_file in tqdm(json_files, desc=f"Processing {project_name}", leave=False):
+            full_path = os.path.join(project_dir, json_file)
+            file_funcs = load_single_file_functions(full_path)
             
-            inputs = tokenizer(
-                batch_data, 
-                padding='max_length',
-                max_length=512,
-                return_tensors="pt"
-            )
+            if not file_funcs:
+                continue
+
+            file_processed_buffer = []
+            current_texts = [item['asm_text'] for item in file_funcs]
             
-            all_input_ids.append(inputs['input_ids'])
-            all_attention_masks.append(inputs['attention_mask'])
-            all_token_type_ids.append(inputs['token_type_ids'])
+            for i in range(0, len(file_funcs), BATCH_SIZE):
+                batch_texts = current_texts[i : i + BATCH_SIZE]
+                batch_metas = file_funcs[i : i + BATCH_SIZE]
+                
+                inputs = tokenizer(
+                    batch_texts, 
+                    padding='max_length',
+                    max_length=TOKENIZER_LEN,
+                    return_tensors="pt"
+                )
+                
+                for j in range(len(batch_texts)):
+                    meta = batch_metas[j]
+                    sample = {
+                        'proj_name': meta['proj_name'],
+                        'file_name': meta['file_name'],
+                        'func_name': meta['func_name'],
+                        'student_input': {
+                            "input_ids": inputs['input_ids'][j],
+                            "attention_mask": inputs['attention_mask'][j],
+                            "token_type_ids": inputs['token_type_ids'][j]
+                        }
+                    }
+                    file_processed_buffer.append(sample)
+            
+            save_file_data(file_processed_buffer, project_name, json_file)
+            
+            del file_funcs
+            del current_texts
+            del file_processed_buffer
 
-    print("Concatenating tensors...")
-    if all_input_ids:
-        final_input_ids = torch.cat(all_input_ids, dim=0)
-        final_attention_masks = torch.cat(all_attention_masks, dim=0)
-        final_token_type_ids = torch.cat(all_token_type_ids, dim=0)
-        
-        print(f"Total samples: {len(metadata_list)}")
-        print(f"Input Ids Shape: {final_input_ids.shape}")
-        
-        save_data = {
-            "student_input": {
-                "input_ids": final_input_ids,
-                "attention_mask": final_attention_masks,
-                "token_type_ids": final_token_type_ids
-            },
-            "meta_data": metadata_list
-        }
+        gc.collect()
 
-        print(f"Saving processed data to {OUTPUT_FILE} ...")
-        torch.save(save_data, OUTPUT_FILE)
-        print("Done！")
-    else:
-        print("No data processed.")
+    print("\nProcessing complete. All files saved.")
 
 if __name__ == "__main__":
     main()
