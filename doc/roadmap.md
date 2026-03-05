@@ -19,10 +19,9 @@
 
 目标：将汇编转换为Student模型的Token ID列表
 
-- 基于1.1生成的json格式汇编，直接使用teacher模型CLAP-ASM的tokenizer生成input_id
-- 检查生成的input，输出小部分内容到本地进行检查
+- 基于1.1生成的json格式汇编，直接使用teacher模型CLAP-ASM的tokenizer生成token id
 
-产出：由json格式汇编由tokenizer转换成的input，作为student和baseline模型的输入
+产出：由json格式汇编由tokenizer转换成的token id，作为student和baseline模型的输入
 
 ### 1.3 teacher知识向量生成
 
@@ -38,7 +37,6 @@
 
 目标：定义一个统一的轻量级Bert架构，同时用于Baseline和student model
 
-- 要求baseline和student模型在rtx2060 12gb上能一个小时内训练完，调整合适的层数和维度
 - Embedding层：将Token ID映射为256维向量
 - Transformer Encoder：4层Transformer Blocks，8个Attention Heads，隐藏层维度256（暂定，可调整）
 - Pooling层：获取[CLS]Token的输出向量，作为整个函数的embedding
@@ -52,8 +50,9 @@
 ### 3.1 数据集划分
 
 - 按项目划分
-- 训练集：clamav,curl,nmap
-- 测试集：zlib,openssl
+- 训练集：openssl, clamav, zlib, nmap
+- 验证集：unrar
+- 测试集：curl
 
 ### 3.2 BCSD评估
 
@@ -61,10 +60,10 @@
 - 定义正样本：比如给定一个函数，正样本是不同编译器或不同优化等级下的该函数
 - 定义负样本：所有非该函数
 
-- 随机选择1000个函数作为查询集
-- 随机选取100000个函数构建candidate pool
+- 随机选择1000个函数作为查询集，如果不满1000个就按最大可供查询的函数数量
+- 随机选取10000个函数构建candidate pool（其中包括所有query的变体）
 - 生成Ground Truth（json文件），映射每个Query在Pool中的正确候选项。
-- 评估函数：计算Query和Pool向量的余弦相似度，并对照Ground Truth计算MRR10和Recall@1
+- 评估函数：计算Query和Pool向量的余弦相似度，并对照Ground Truth计算MAP@50，R-Precision和NDCG@50
 
 ## 4 Baseline的训练和评估
 
@@ -79,12 +78,11 @@
 - 输入：从训练集动态采样三元组（Anchor, Positive, Negative）。（输入是三个函数的encoding）
 - 过程：SmallBERT分别计算三个序列的嵌入向量
 - 损失函数：TripletLoss，使(Anchor, Positive)距离最小化，（Anchor, Nagative）距离最大化
-
-损失函数或许应该只用MLM，不用TripletLoss
+- 训练20个epoch
 
 ### 4.3 评估Baseline
 
-- 获取Baseline的MRR10和Recall@1
+- 获取Baseline的MAP@50，R-Precision和NDCG@50
 
 ## 5 student model知识蒸馏
 
@@ -108,7 +106,7 @@
     - 使用ranking based ditillation方法
     - 查阅论文，可以尝试多种ranking based distillaiton方法，并进行横向对比
 
-方案A：基于概率分布KL-Divergence
+方案：基于概率分布KL-Divergence
 
 - 构建新的数据集Distillation Dataset（不使用baseline的triplet采样）
     - 输入：汇编json文件和teacher_embedding
@@ -132,22 +130,16 @@
     - Loss: 用LossKD计算student_vecs和teacher_vecs之间的散度
     - Backward: 更新student参数
 
-- 评估
-    - 每训练1个Epoch，在BCSD测试集验证，对比student的MRR是否超过Baseline
+- 训练20个Epoch，在BCSD测试集验证，对比student的MAP@50，R-Precision和NDCG@50是否超过Baseline
 
-### 5.2 模型评估
+### 5.2 模型微调
 
-- 将Student Model在测试集上运行BCSD评估。
-
-产出：student model的MRR10和Recall@1
-
-### 5.3 微调
-
-- 对KD预训练的模型进行TripletLoss微调
+- 在student的模型基础上使用tripletloss进行微调
+- 获取20个epoch后经过微调的student模型MAP@50，R-Precision和NDCG@50数据
 
 ## 6 分析
 
-- 对比只使用MLM的Baseline，经过KD的Student Model，经过KD和微调的Student Model
+- 对比只使用Tripletloss的Baseline，经过KD的Student Model，经过KD和tripletloss微调的Student Model
 
 - 期望：微调 > KD > Baseline
 

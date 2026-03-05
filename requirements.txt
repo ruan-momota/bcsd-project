@@ -1,6 +1,5 @@
 torch==2.9.1
 transformers
-angr
 tqdm
 scikit-learn
 numpy==1.26.4

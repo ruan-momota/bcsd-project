@@ -4,13 +4,13 @@
 
 Project Name         | Files    | Raw Funcs    | Valid Funcs 
 ------------------------------------------------------------
-clamav               | 240      | 158127       | 88173                        
+clamav               | 240      | 158127       88173                        
 curl                 | 40       | 66797        | 54621       
-nmap                 | 120      | 495539       | 390057                       
-openssl              | 400      | 741787       | 526430                    
+nmap                 | 120      | 495539     | 390057                       
+openssl              | 400      | 741787      | 526430                    
 unrar                | 40       | 37316        | 28158       
 z3                   | 40       | 2828183      | 2667156     
-zlib                 | 160      | 27375        | 17451                       
+zlib                 | 160      | 27375      | 17451                       
 
 ------------------------------------------------------------
 TOTAL                | 1040     | 4355124      | 3772046   
@@ -108,22 +108,6 @@ type_vocab_size=512
 
 ## training related
 
-- 未去除脏数据
-71778 base
-71779 distil
-71985 distil+triplet
-
-- 去除脏数据后，不包含z3：
-baseline
-    - MRR@10 = 0.5083, Recall@1 = 0.5000
-distillation
-    - MRR@10 = 0.5070, Recall@1 = 0.5000
-distillation + triplet
-    - MRR@10 = 0.5070, Recall@1 = 0.4990
-
-问题：
-- baseline 随机抽取样本的时候需不需要固定种子
-
 ## teacher related
 
 先想办法提高teacher的准确率
@@ -170,9 +154,6 @@ Kept Functions by Project (Descending):
   curl                : 21186
   unrar               : 14120
   zlib                : 4467
-
-- 使用128 teacher，算z3
-去除脏数据后（同名或不同名，函数体相同的）
 
 训练：openssl, clamav, zlib, nmap (373269)
 验证：unrar (14510)
@@ -273,3 +254,20 @@ Submitted batch job 78230
 Submitted batch job 78231
 (bcsd) ruan@citrin:~/binai/bcsd-project (0) [16:20:24] % sbatch run_mlm.sh    
 Submitted batch job 78232
+
+Total samples loaded: 354808
+Skipped 464062 dirty samples based on blocklist.
+Valid function groups (>=2 variants): 21219
+
+
+
+  Total Processed:    879834
+  Kept :      390114
+  Total Filtered Rate: 55.66%
+
+  openssl             : 171628
+  nmap                : 131835
+  clamav              : 46878
+  curl                : 21186
+  unrar               : 14120
+  zlib                : 4467
