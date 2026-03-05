@@ -12,7 +12,7 @@ import config
 
 EPOCHS = 20
 EPOCH_SAMPLE_RATE = 15
-BATCH_SIZE = 64
+BATCH_SIZE = 128
 LR = 5e-5
 
 SAVE_DIR = os.path.join(config.DATA_DIR, "checkpoints", "baseline")

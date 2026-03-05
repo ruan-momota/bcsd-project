@@ -7,10 +7,9 @@ import re
 import json
 import os
 
-loc_pattern = re.compile(r' (loc|locret)_(\w+)')    # 如loc_40102A
-self_pattern = re.compile(r'\$\+(\w+)')             # 如$+5
+loc_pattern = re.compile(r' (loc|locret)_(\w+)')   
+self_pattern = re.compile(r'\$\+(\w+)')     
 
-# 将loc_转换为INSTR
 def rebase(asm_dict):
     index = 1
     rebase_assembly = {}
