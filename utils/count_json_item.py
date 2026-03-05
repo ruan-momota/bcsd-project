@@ -16,16 +16,11 @@ def count_elements_large_file(file_path):
     print("Started, it takes time...")
 
     try:
-        # 注意：ijson 建议以二进制模式 'rb' 打开文件
         with open(file_path, 'rb') as f:
-            # 'item' 表示我们要遍历根数组中的每一个项目
-            # ijson.items 返回的是一个生成器，每次只产生一个对象，不占用多余内存
             elements = ijson.items(f, 'item')
             
             for _ in elements:
                 count += 1
-                
-                # 可选：每处理 10,000 个元素打印一次进度，避免觉得程序卡死
                 if count % 10000 == 0:
                     print(f"\rScanned {count} elements...", end="", flush=True)
 
